@@ -3,6 +3,7 @@ from rich.jupyter import _render_segments
 from rich.live import Live
 from rich.table import Table
 
+
 def check_is_in_notebook():
     try:
         shell = get_ipython().__class__.__name__
@@ -87,4 +88,3 @@ class RichTablePrinter(object):
     def finalize(self):
         if self.live is not None:
             self.live.stop()
-

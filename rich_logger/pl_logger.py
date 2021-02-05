@@ -2,7 +2,7 @@ from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.loggers.base import rank_zero_experiment
 from pytorch_lightning.utilities import rank_zero_only
 
-from table_printer import RichTablePrinter
+from .table_printer import RichTablePrinter
 
 
 class RichTableLogger(LightningLoggerBase):
