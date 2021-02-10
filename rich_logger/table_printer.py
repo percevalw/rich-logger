@@ -19,7 +19,7 @@ def check_is_in_notebook():
 
 class RichTablePrinter(object):
     def __init__(self, fields={}, key=None):
-        self.fields = fields
+        self.fields = dict(fields)
         self.key = key
         self.key_to_row_idx = {}
         self.name_to_column_idx = {}
@@ -27,6 +27,8 @@ class RichTablePrinter(object):
         self.console = None
         self.live = None
         self.best = {}
+        if key not in self.fields:
+            self.fields = {key: {}, **fields}
 
     def _repr_html_(self) -> str:
         segments = list(self.console.render(self.table, self.console.options))  # type: ignore
@@ -46,9 +48,6 @@ class RichTablePrinter(object):
                 self.live = Live(self.table, console=self.console)
                 self.live.start()
                 self.refresh = lambda: self.live.refresh()
-            for name in self.fields:
-                self.table.add_column(self.fields.get(name, {}).get("name", name), no_wrap=True)
-                self.name_to_column_idx[name] = len(self.name_to_column_idx)
             # self.console = Console()
             # table_centered = Columns((self.table,), align="center", expand=True)
             # self.live = Live(table_centered, console=console)
@@ -59,6 +58,18 @@ class RichTablePrinter(object):
                 self.table.add_column(self.fields.get(name, {}).get("name", name), no_wrap=True)
                 self.table.columns[-1]._cells = [''] * (len(self.table.columns[0]._cells) if len(self.table.columns) else 0)
                 self.name_to_column_idx[name] = len(self.name_to_column_idx)
+        new_name_to_column_idx = {}
+        columns = []
+        def get_name_index(name):
+            try:
+                return list(self.fields.keys()).index(name)
+            except ValueError:
+                return len(self.name_to_column_idx)
+        for name in sorted(self.name_to_column_idx.keys(), key=get_name_index):
+            columns.append(self.table.columns[self.name_to_column_idx[name]])
+            new_name_to_column_idx[name] = len(new_name_to_column_idx)
+        self.table.columns = columns
+        self.name_to_column_idx = new_name_to_column_idx
 
         if self.key is not None and info[self.key] in self.key_to_row_idx:
             idx = self.key_to_row_idx[info[self.key]]
@@ -88,3 +99,18 @@ class RichTablePrinter(object):
     def finalize(self):
         if self.live is not None:
             self.live.stop()
+
+
+if __name__ == "__main__":
+    import time
+    printer = RichTablePrinter(key="step", fields={"col2": {"name": "COLUMN2"}, "col1": {"name": "COLUMN1"}})
+    printer.log({"step": 1, "col1": 4})
+    time.sleep(1)
+    printer.log({"step": 1, "col1": 3})
+    time.sleep(1)
+    printer.log({"step": 2, "col2": "ok"})
+    time.sleep(1)
+    printer.log({"step": 2, "col3": 3.5})
+    time.sleep(1)
+    printer.log({"step": 3, "col2": "ko", "col1": 4})
+    printer.finalize()
