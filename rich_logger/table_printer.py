@@ -72,16 +72,17 @@ class RichTablePrinter(object):
             # self.live = Live(table_centered, console=console)
             # self.live.start()
 
-        filtered_info = {}
         for name, value in info.items():
             if name not in self.name_to_column_idx:
                 matcher, column_name = get_last_matching_value(self.fields, name, "name", default=name)
                 if column_name is False:
+                    self.name_to_column_idx[name] = -1
                     continue
-                filtered_info[name] = value
+                if column_name is False:
+                    continue
                 self.table.add_column(re.sub(matcher, column_name, name) if matcher is not None else name, no_wrap=True)
                 self.table.columns[-1]._cells = [''] * (len(self.table.columns[0]._cells) if len(self.table.columns) else 0)
-                self.name_to_column_idx[name] = len(self.name_to_column_idx)
+                self.name_to_column_idx[name] = (max(self.name_to_column_idx.values()) + 1) if len(self.name_to_column_idx) else 0
         new_name_to_column_idx = {}
         columns = []
 
@@ -97,14 +98,16 @@ class RichTablePrinter(object):
         self.table.columns = columns
         self.name_to_column_idx = new_name_to_column_idx
 
-        if self.key is not None and filtered_info[self.key] in self.key_to_row_idx:
-            idx = self.key_to_row_idx[filtered_info[self.key]]
+        if self.key is not None and self.key in info and info[self.key] in self.key_to_row_idx:
+            idx = self.key_to_row_idx[info[self.key]]
+        elif self.key is not None and self.key not in info and self.key_to_row_idx:
+            idx = list(self.key_to_row_idx.values())[-1]
         else:
             self.table.add_row()
             idx = len(self.table.rows) - 1
             if self.key is not None:
-                self.key_to_row_idx[filtered_info[self.key]] = idx
-        for name, value in filtered_info.items():
+                self.key_to_row_idx[info[self.key]] = idx
+        for name, value in info.items():
             formatted_value = get_last_matching_value(self.fields, name, "format", "{}")[1].format(value)
             goal = get_last_matching_value(self.fields, name, "goal", None)[1]
             if goal is not None:
@@ -117,7 +120,8 @@ class RichTablePrinter(object):
                         formatted_value = "[green]" + formatted_value + "[/green]"
                     elif diff <= 0:
                         formatted_value = "[red]" + formatted_value + "[/red]"
-            self.table.columns[self.name_to_column_idx[name]]._cells[idx] = formatted_value
+            if self.name_to_column_idx[name] >= 0:
+                self.table.columns[self.name_to_column_idx[name]]._cells[idx] = formatted_value
 
         self.refresh()
 
