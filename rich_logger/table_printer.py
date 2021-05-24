@@ -60,6 +60,8 @@ class RichTablePrinter(object):
             self.fields = {key: {}, **fields}
 
     def _repr_html_(self) -> str:
+        if self.console is None:
+            return "Empty table"
         segments = list(self.console.render(self.table, self.console.options))  # type: ignore
         html = _render_segments(segments)
         return html
@@ -88,8 +90,6 @@ class RichTablePrinter(object):
                 if column_name is False:
                     self.name_to_column_idx[name] = -1
                     continue
-                if column_name is False:
-                    continue
                 self.table.add_column(re.sub(matcher, column_name, name) if matcher is not None else name, no_wrap=True)
                 self.table.columns[-1]._cells = [''] * (len(self.table.columns[0]._cells) if len(self.table.columns) else 0)
                 self.name_to_column_idx[name] = (max(self.name_to_column_idx.values()) + 1) if len(self.name_to_column_idx) else 0
@@ -104,7 +104,10 @@ class RichTablePrinter(object):
 
         for name in sorted(self.name_to_column_idx.keys(), key=get_name_index):
             columns.append(self.table.columns[self.name_to_column_idx[name]])
-            new_name_to_column_idx[name] = len(new_name_to_column_idx)
+            if self.name_to_column_idx[name] >= 0:
+                new_name_to_column_idx[name] = (max(new_name_to_column_idx.values()) + 1) if len(new_name_to_column_idx) else 0
+            else:
+                new_name_to_column_idx[name] = -1
         self.table.columns = columns
         self.name_to_column_idx = new_name_to_column_idx
 
@@ -118,6 +121,8 @@ class RichTablePrinter(object):
             if self.key is not None:
                 self.key_to_row_idx[info[self.key]] = idx
         for name, value in info.items():
+            if self.name_to_column_idx[name] < 0:
+                continue
             formatted_value = get_last_matching_value(self.fields, name, "format", "{}")[1].format(value)
             goal = get_last_matching_value(self.fields, name, "goal", None)[1]
             if goal is not None:
@@ -130,8 +135,7 @@ class RichTablePrinter(object):
                         formatted_value = "[green]" + formatted_value + "[/green]"
                     elif diff <= 0:
                         formatted_value = "[red]" + formatted_value + "[/red]"
-            if self.name_to_column_idx[name] >= 0:
-                self.table.columns[self.name_to_column_idx[name]]._cells[idx] = formatted_value
+            self.table.columns[self.name_to_column_idx[name]]._cells[idx] = formatted_value
 
         self.refresh()
 
