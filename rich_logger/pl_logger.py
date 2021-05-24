@@ -7,6 +7,14 @@ from .table_printer import RichTablePrinter
 
 class RichTableLogger(LightningLoggerBase):
     def __init__(self, key=None, fields=None):
+        """
+        Pytorch lightning logger based on RichTablePrinter
+        :param key: str or None
+            main key to group results by row
+        :param fields: dict of (dict or False)
+            Field descriptors containing goal ("lower_is_better" or "higher_is_better"), format and display name
+            The key is a regex that will be used to match the fields to log
+        """
         super().__init__()
         self.printer = RichTablePrinter(key=key, fields=fields)
 

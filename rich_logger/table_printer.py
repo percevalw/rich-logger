@@ -38,6 +38,16 @@ def get_last_matching_value(matchers, name, field, default):
 
 class RichTablePrinter(object):
     def __init__(self, fields={}, key=None):
+        """
+        Logger based on `rich` tables
+
+        :param key: str or None
+            main key to group results by row
+        :param fields: dict of (dict or False)
+            Field descriptors containing goal ("lower_is_better" or "higher_is_better"), format and display name
+            The key is a regex that will be used to match the fields to log
+        """
+
         self.fields = dict(fields)
         self.key = key
         self.key_to_row_idx = {}
