@@ -4,10 +4,11 @@ Table logger using Rich, aimed at Pytorch Lightning logging
 # Features
 
 - display your training logs with pretty [rich](https://github.com/willmcgugan/rich) tables 
-- describe your fields with `goal` (higher_is_better or lower_is_better), `format` and `name`
+- describe your fields with `goal` ("higher_is_better" or "lower_is_better"), `format` and `name`
 - a field descriptor can be matched with any regex
 - a field name can be computed as a regex substitution
-- integrate easily with [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning)
+- works in Jupyter notebooks as well as in a command line
+- integrates easily with [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning)
 
 # Demo
 ```python
