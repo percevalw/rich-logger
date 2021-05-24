@@ -40,5 +40,3 @@ optimization()
 from rich_logger import RichTableLogger
 trainer = pl.Trainer(..., logger=[RichTableLogger(key="epoch", fields=logger_fields)])
 ```
-
-[]: rich
