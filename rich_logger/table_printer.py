@@ -1,3 +1,5 @@
+import re
+
 from rich.console import Console
 from rich.jupyter import _render_segments
 from rich.live import Live
@@ -17,6 +19,23 @@ def check_is_in_notebook():
         return False  # Probably standard Python interpreter
 
 
+def get_last_matching_index(matchers, name):
+    for i, matcher in reversed(list(enumerate(matchers))):
+        if re.match(matcher, name):
+            return i
+    raise ValueError()
+
+
+def get_last_matching_value(matchers, name, field, default):
+    for matcher, value in reversed(list(matchers.items())):
+        if re.match(matcher, name):
+            if value is False:
+                return matcher, False
+            elif field in value:
+                return matcher, value[field]
+    return None, default
+
+
 class RichTablePrinter(object):
     def __init__(self, fields={}, key=None):
         self.fields = dict(fields)
@@ -27,7 +46,7 @@ class RichTablePrinter(object):
         self.console = None
         self.live = None
         self.best = {}
-        if key not in self.fields:
+        if key is not None and key not in self.fields:
             self.fields = {key: {}, **fields}
 
     def _repr_html_(self) -> str:
@@ -53,36 +72,42 @@ class RichTablePrinter(object):
             # self.live = Live(table_centered, console=console)
             # self.live.start()
 
+        filtered_info = {}
         for name, value in info.items():
             if name not in self.name_to_column_idx:
-                self.table.add_column(self.fields.get(name, {}).get("name", name), no_wrap=True)
+                matcher, column_name = get_last_matching_value(self.fields, name, "name", default=name)
+                if column_name is False:
+                    continue
+                filtered_info[name] = value
+                self.table.add_column(re.sub(matcher, column_name, name) if matcher is not None else name, no_wrap=True)
                 self.table.columns[-1]._cells = [''] * (len(self.table.columns[0]._cells) if len(self.table.columns) else 0)
                 self.name_to_column_idx[name] = len(self.name_to_column_idx)
         new_name_to_column_idx = {}
         columns = []
+
         def get_name_index(name):
             try:
-                return list(self.fields.keys()).index(name)
+                return get_last_matching_index(self.fields, name)
             except ValueError:
                 return len(self.name_to_column_idx)
+
         for name in sorted(self.name_to_column_idx.keys(), key=get_name_index):
             columns.append(self.table.columns[self.name_to_column_idx[name]])
             new_name_to_column_idx[name] = len(new_name_to_column_idx)
         self.table.columns = columns
         self.name_to_column_idx = new_name_to_column_idx
 
-        if self.key is not None and info[self.key] in self.key_to_row_idx:
-            idx = self.key_to_row_idx[info[self.key]]
+        if self.key is not None and filtered_info[self.key] in self.key_to_row_idx:
+            idx = self.key_to_row_idx[filtered_info[self.key]]
         else:
             self.table.add_row()
             idx = len(self.table.rows) - 1
             if self.key is not None:
-                self.key_to_row_idx[info[self.key]] = idx
-        for name, value in info.items():
-            field = self.fields.get(name, {})
-            formatted_value = field.get("format", "{}").format(value)
-            if "goal" in field:
-                goal = field["goal"]
+                self.key_to_row_idx[filtered_info[self.key]] = idx
+        for name, value in filtered_info.items():
+            formatted_value = get_last_matching_value(self.fields, name, "format", "{}")[1].format(value)
+            goal = get_last_matching_value(self.fields, name, "goal", None)[1]
+            if goal is not None:
                 if name not in self.best:
                     self.best[name] = value
                 else:
@@ -103,6 +128,7 @@ class RichTablePrinter(object):
 
 if __name__ == "__main__":
     import time
+
     printer = RichTablePrinter(key="step", fields={"col2": {"name": "COLUMN2"}, "col1": {"name": "COLUMN1"}})
     printer.log({"step": 1, "col1": 4})
     time.sleep(1)
