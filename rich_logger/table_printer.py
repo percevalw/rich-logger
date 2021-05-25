@@ -103,8 +103,8 @@ class RichTablePrinter(object):
                 return len(self.name_to_column_idx)
 
         for name in sorted(self.name_to_column_idx.keys(), key=get_name_index):
-            columns.append(self.table.columns[self.name_to_column_idx[name]])
             if self.name_to_column_idx[name] >= 0:
+                columns.append(self.table.columns[self.name_to_column_idx[name]])
                 new_name_to_column_idx[name] = (max(new_name_to_column_idx.values()) + 1) if len(new_name_to_column_idx) else 0
             else:
                 new_name_to_column_idx[name] = -1
