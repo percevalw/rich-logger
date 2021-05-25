@@ -1,7 +1,7 @@
 # rich_logger
 Table logger using Rich, aimed at Pytorch Lightning logging
 
-# Features
+## Features
 
 - display your training logs with pretty [rich](https://github.com/willmcgugan/rich) tables 
 - describe your fields with `goal` ("higher_is_better" or "lower_is_better"), `format` and `name`
@@ -10,7 +10,7 @@ Table logger using Rich, aimed at Pytorch Lightning logging
 - works in Jupyter notebooks as well as in a command line
 - integrates easily with [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning)
 
-# Demo
+## Demo
 ```python
 import time
 import random
@@ -36,7 +36,7 @@ optimization()
 ```
 ![Demo](demo.gif)
 
-# Use it with PytorchLightning
+## Use it with PytorchLightning
 ```python
 from rich_logger import RichTableLogger
 trainer = pl.Trainer(..., logger=[RichTableLogger(key="epoch", fields=logger_fields)])
