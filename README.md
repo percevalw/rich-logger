@@ -31,6 +31,7 @@ def optimization():
         time.sleep(random.random())
         printer.log({"step": i, "task_recall": 0. if i < 3 else (i-3)/10., "duration": time.time() - t})
         t = time.time()
+    printer.finalize()
         
 optimization()
 ```
