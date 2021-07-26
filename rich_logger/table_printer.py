@@ -76,7 +76,7 @@ class RichTablePrinter(object):
                 dh = display(None, display_id=True)
                 self.refresh = lambda: dh.update(self)
             else:
-                self.live = Live(self.table, console=self.console)
+                self.live = Live(self.table, console=self.console, auto_refresh=False)
                 self.live.start()
                 self.refresh = lambda: self.live.refresh()
             # self.console = Console()
