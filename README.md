@@ -1,4 +1,5 @@
 ![tests](https://github.com/percevalw/rich-logger/actions/workflows/tests.yml/badge.svg)
+![pypi](https://badge.fury.io/py/rich-logger.svg)
 
 # rich-logger
 Table logger using Rich, aimed at Pytorch Lightning logging
