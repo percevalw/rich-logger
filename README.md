@@ -1,4 +1,6 @@
-# rich_logger
+![tests](https://github.com/percevalw/rich-logger/actions/workflows/tests.yml/badge.svg)
+
+# rich-logger
 Table logger using Rich, aimed at Pytorch Lightning logging
 
 ## Features
