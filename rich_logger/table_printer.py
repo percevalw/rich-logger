@@ -1,18 +1,34 @@
+import os
 import re
 import typing
+from collections import OrderedDict
 from enum import Enum
+from numbers import Number
 from typing import Any, Dict, Iterable, Optional, Sequence, Union
 
 from pydantic import BaseModel, Extra
-from rich import get_console
+from rich import get_console, reconfigure
 from rich.console import RenderableType
 from rich.control import Control
 from rich.jupyter import _render_segments
 from rich.live import Live
-from rich.progress import Progress
-from rich.table import Table
+from rich.progress import (
+    BarColumn,
+    Progress,
+    ProgressColumn,
+    Task,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Column, Table
+from rich.text import Text
 
 T = typing.TypeVar("T")
+
+# If we're in a slurm job, force the console to act as in a standard terminal
+if "SLURM_JOBID" in os.environ:
+    reconfigure(force_terminal=True)
 
 
 def check_is_in_notebook():
@@ -134,6 +150,21 @@ def get_last_matching_value(matchers, name, field, default):
     return None, default
 
 
+class PostfixColumn(ProgressColumn):
+    """A column containing text."""
+
+    def __init__(
+        self,
+        table_column: Optional[Column] = None,
+    ) -> None:
+        super().__init__(table_column=table_column or Column(no_wrap=True))
+
+    def render(self, task: "Task") -> Text:
+        _text = task.fields.get("postfix", "")
+        text = Text(_text)
+        return text
+
+
 class RichTablePrinter(Progress):
     def __init__(
         self, fields: Dict[str, Union[Dict, bool]] = {}, key: Optional[str] = None
@@ -171,7 +202,13 @@ class RichTablePrinter(Progress):
         self.logger_table: Optional[Table] = None
         self.display_handle: Any = None
 
-        super().__init__()
+        super().__init__(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            PostfixColumn(),
+        )
         self.live.__class__ = FixedLive
 
     def get_renderables(self) -> Iterable[RenderableType]:
@@ -180,6 +217,16 @@ class RichTablePrinter(Progress):
             yield self.logger_table
         tasks_table = self.make_tasks_table(self.tasks)
         yield tasks_table
+
+    def prune_tasks(self):
+        # Prune displayed & finished tasks
+        remaining_tasks = []
+        for last_task in self.displayed_tasks:
+            if last_task["disposable"]:
+                self.remove_task(last_task["task_id"])
+            else:
+                remaining_tasks.append(last_task)
+        self.displayed_tasks = remaining_tasks
 
     def progress_bar(
         self,
@@ -206,34 +253,6 @@ class RichTablePrinter(Progress):
         -------
         Iterable
         """
-        if total is None:
-            try:
-                total = len(iterable)
-            except AttributeError:
-                pass
-
-        # Prune displayed & finished tasks
-        remaining_tasks = []
-        for last_task in self.displayed_tasks:
-            if last_task["disposable"]:
-                self.remove_task(last_task["task_id"])
-            else:
-                remaining_tasks.append(last_task)
-        self.displayed_tasks = remaining_tasks
-
-        task_id = self.add_task(
-            description=description or "",
-            total=total,
-        )
-        task = {"task_id": task_id, "disposable": False}
-        self.displayed_tasks.append(task)
-        try:
-            for item in iterable:
-                yield item
-                self.update(task_id, advance=1)
-        finally:
-            if not leave:
-                task["disposable"] = True
 
     def log_metrics(self, info: Dict[str, Any]):
         """
@@ -244,13 +263,7 @@ class RichTablePrinter(Progress):
         info: Dict[str, Any]
             The value of each column
         """
-        if self.logger_table is None:
-            self.logger_table = Table()
-            self.console.clear_live()
-            self.start()
-
-            # if is_in_notebook:
-            #     self.display_handle = display(None, display_id=True)
+        self.ensure_live()
 
         for name, value in info.items():
             if name not in self.name_to_column_idx:
@@ -260,10 +273,13 @@ class RichTablePrinter(Progress):
                 if column_name is False:
                     self.name_to_column_idx[name] = -1
                     continue
-                self.logger_table.add_column(
-                    re.sub(matcher, column_name, name) if matcher is not None else name,
-                    no_wrap=True,
-                )
+                if (
+                    matcher is not None
+                    and re.compile(matcher).groups > 0
+                    and re.findall(r"\\\d+", column_name)
+                ):
+                    column_name = re.sub(matcher, column_name, name)
+                self.logger_table.add_column(column_name, no_wrap=True)
                 self.logger_table.columns[-1]._cells = [""] * (
                     len(self.logger_table.columns[0]._cells)
                     if len(self.logger_table.columns)
@@ -346,17 +362,27 @@ class RichTablePrinter(Progress):
     def log(self, logger):
         self.rich_log = logger
 
+    def ensure_live(self):
+        if self.logger_table is None:
+            self.logger_table = Table()
+            self.console.clear_live()
+            self.start()
+
     def finalize(self):
-        self.refresh()
-        if self.live is not None:
-            self.live.stop()
-        try:
-            import tqdm
-        except ImportError:
-            pass
-        else:
-            if self._old_tqdm_new is not None:
-                tqdm.tqdm.__new__ = self._old_tqdm_new
+        if self.logger_table is not None:
+            self.refresh()
+            self.stop()
+            try:
+                import tqdm
+            except ImportError:
+                pass
+            else:
+                if self._old_tqdm_new is not None:
+                    tqdm.tqdm.__new__ = self._old_tqdm_new
+                    self._old_tqdm_new = None
+            if self.console.is_interactive and self.console.is_terminal:
+                self.console.print()
+            self.logger_table = None
 
     def hijack_tqdm(self):
         """
@@ -364,7 +390,11 @@ class RichTablePrinter(Progress):
         """
         import tqdm
 
+        if self._old_tqdm_new is not None:
+            return
+
         self._old_tqdm_new = tqdm.tqdm.__new__
+
         logger = self
 
         def __new__(
@@ -397,20 +427,156 @@ class RichTablePrinter(Progress):
             gui=False,
             **kwargs,
         ):
-            return logger.progress_bar(
+            logger.ensure_live()
+
+            return TqdmShim(
                 iterable=iterable,
                 description=desc,
                 total=total,
                 leave=leave,
+                disable=disable,
+                printer=logger,
             )
 
         tqdm.tqdm.__new__ = __new__
 
     def __enter__(self) -> "RichTablePrinter":
-        super().__enter__()
         self.hijack_tqdm()
+        self.ensure_live()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        super().__exit__(exc_type, exc_val, exc_tb)
         self.finalize()
+
+
+class TqdmShim:
+    def __init__(
+        self,
+        total,
+        iterable,
+        disable,
+        description,
+        leave,
+        printer: "RichTablePrinter",
+    ):
+        self.total = total
+        self.iterable = iterable
+        self.disable = disable
+        self.description = description
+        self.leave = leave
+        self.printer = printer
+
+        if self.disable:
+            self.task = self.task_id = None
+        else:
+            if self.total is None:
+                try:
+                    self.total = len(self.iterable)
+                except (AttributeError, TypeError):
+                    pass
+
+                self.printer.prune_tasks()
+
+            self.task_id = self.printer.add_task(
+                description=self.description or "",
+                total=self.total,
+            )
+            self.task = {"task_id": self.task_id, "disposable": False}
+            self.printer.displayed_tasks.append(self.task)
+
+    def __iter__(self):
+        if self.disable:
+            yield from self.iterable
+        else:
+            try:
+                for item in self.iterable:
+                    yield item
+                    self.printer.update(self.task_id, advance=1)
+            finally:
+                if not self.leave:
+                    self.task["disposable"] = True
+
+    def reset(self, total=0):
+        if self.task_id is None:
+            return
+        self.printer.reset(self.task_id, total=total)
+
+    def update(self, n=1):
+        if self.task_id is None:
+            return
+        self.printer.update(self.task_id, advance=n)
+
+    def set_description(self, desc, refresh=True):
+        if self.task_id is None:
+            return
+        self.printer.update(self.task_id, description=desc)
+        if refresh:
+            self.printer.refresh()
+
+    def refresh(self):
+        if self.task_id is None:
+            return
+        self.printer.refresh()
+
+    @staticmethod
+    def format_num(n):
+        """
+        Intelligent scientific notation (.3g).
+        Taken straight from tqdm's format_num
+
+        Parameters
+        ----------
+        n  : int or float or Numeric
+            A Number.
+
+        Returns
+        -------
+        out  : str
+            Formatted number.
+        """
+        f = "{0:.3g}".format(n).replace("+0", "+").replace("-0", "-")
+        n = str(n)
+        return f if len(f) < len(n) else n
+
+    def set_postfix(self, ordered_dict=None, refresh=True, **kwargs):
+        """
+        Set/modify postfix (additional stats)
+        with automatic formatting based on datatype.
+
+        Parameters
+        ----------
+        ordered_dict  : dict or OrderedDict, optional
+        refresh  : bool, optional
+            Forces refresh [default: True].
+        kwargs  : dict, optional
+        """
+        # Sort in alphabetical order to be more deterministic
+        if self.task_id is None:
+            return
+
+        postfix = OrderedDict([] if ordered_dict is None else ordered_dict)
+        for key in sorted(kwargs.keys()):
+            postfix[key] = kwargs[key]
+        # Preprocess stats according to datatype
+        for key in postfix.keys():
+            # Number: limit the length of the string
+            if isinstance(postfix[key], Number):
+                postfix[key] = self.format_num(postfix[key])
+            # Else for any other type, try to get the string conversion
+            elif not isinstance(postfix[key], str):
+                postfix[key] = str(postfix[key])
+            # Else if it's a string, don't need to preprocess anything
+        # Stitch together to get the final postfix
+        self.printer.update(
+            self.task_id,
+            postfix=", ".join(
+                key + "=" + postfix[key].strip() for key in postfix.keys()
+            ),
+        )
+        if refresh:
+            self.printer.refresh()
+
+    def close(self):
+        if self.task is not None:
+            self.task["disposable"] = True
+        self.printer.prune_tasks()
