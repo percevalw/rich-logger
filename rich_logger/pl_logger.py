@@ -9,7 +9,10 @@ from .table_printer import RichTablePrinter
 
 class RichTableLogger(LightningLoggerBase):
     def __init__(
-        self, fields: Dict[str, Union[Dict, bool]] = {}, key: Optional[str] = None
+        self,
+        fields: Dict[str, Union[Dict, bool]] = {},
+        key: Optional[str] = None,
+        hijack_tqdm: bool = True,
     ):
         """
         Logger based on `rich` tables
@@ -29,9 +32,13 @@ class RichTableLogger(LightningLoggerBase):
                 - goal: "lower_is_better" or "higher_is_better"
                 - goal_wait: how many logging row should we wait before coloring cells
                 - format: a format string to display the value
+        hijack_tqdm: bool
+            Replace tqdm progress bars with rich progress bars (defaults to True)
         """
         super().__init__()
         self.printer = RichTablePrinter(key=key, fields=fields)
+        if hijack_tqdm:
+            self.printer.hijack_tqdm()
 
     @property
     def name(self):
