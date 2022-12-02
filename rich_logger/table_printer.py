@@ -137,6 +137,7 @@ def get_last_matching_index(matchers: Sequence[str], name: str):
 
 
 def get_last_matching_value(matchers, name, field, default):
+    has_match = False
     for matcher, rule in reversed(list(matchers.items())):
         if re.match(matcher, name):
             if rule is False:
@@ -145,8 +146,11 @@ def get_last_matching_value(matchers, name, field, default):
                 return matcher, default
             else:
                 field_value = getattr(rule, field)
+                has_match = True
                 if field_value is not None:
                     return matcher, field_value
+    if not has_match:
+        return None, False
     return None, default
 
 
