@@ -130,10 +130,14 @@ def validate_rules(rules: Dict[str, Union[Rule, bool]]):
 
 
 def get_last_matching_index(matchers: Sequence[str], name: str):
-    for i, matcher in reversed(list(enumerate(matchers))):
+    index = None
+    for i, (matcher, rule) in list(enumerate(matchers.items())):
         if re.match(matcher, name):
-            return i
-    raise ValueError()
+            if rule is not True or index is None:
+                index = i
+    if index is None:
+        raise ValueError()
+    return index
 
 
 def get_last_matching_value(matchers, name, field, default):
@@ -143,7 +147,7 @@ def get_last_matching_value(matchers, name, field, default):
             if rule is False:
                 return matcher, False
             elif rule is True:
-                return matcher, default
+                has_match = True
             else:
                 field_value = getattr(rule, field)
                 has_match = True
