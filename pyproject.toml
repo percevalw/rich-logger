@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rich-logger"
-version = "0.2.1"
+version = "0.3.0"
 description = "Table logger using Rich"
 authors = ["Perceval Wajsbürt <perceval.wajsburt@sorbonne-universite.fr>"]
 license = "BSD 3-Clause"

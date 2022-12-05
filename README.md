@@ -33,6 +33,7 @@ logger_fields = {
         "name": r"\1_r",
     },
     "duration": {"format": "{:.1f}", "name": "dur(s)"},
+    ".*": True,  # Any other field must be logged at the end
 }
 
 

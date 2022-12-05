@@ -34,6 +34,7 @@ def test_pytorch_lightning_logger(tmpdir, capsys):
             fields={
                 "epoch": True,
                 "step": True,
+                ".*": True,
             }
         ),
     )
