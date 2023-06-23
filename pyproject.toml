@@ -22,7 +22,7 @@ tqdm = ">=2.0.0"
 pytorch-lightning = ">=1.0.0"
 
 [tool.poetry.plugins."spacy_loggers"]
-"rich-logger" = "rich_logger.spacy:rich_logger"
+"rich-logger" = "rich_logger.spacy_logger:rich_logger"
 
 [tool.interrogate]
 ignore-init-method = true
