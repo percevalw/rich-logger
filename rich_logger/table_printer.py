@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import typing
 from collections import OrderedDict
 from enum import Enum
@@ -85,7 +86,6 @@ class FixedLive(Live):
 
                     warnings.warn('install "ipywidgets" for Jupyter support')
                 else:
-
                     if self.ipy_widget is None:
                         self.ipy_widget = display(None, display_id=True)
 
@@ -175,7 +175,11 @@ class PostfixColumn(ProgressColumn):
 
 class RichTablePrinter(Progress):
     def __init__(
-        self, fields: Dict[str, Union[Dict, bool]] = {}, key: Optional[str] = None
+        self,
+        fields: Dict[str, Union[Dict, bool]] = {},
+        key: Optional[str] = None,
+        auto_refresh: bool = False,
+        **rich_kwargs,
     ):
         """
         Logger based on `rich` tables
@@ -193,6 +197,10 @@ class RichTablePrinter(Progress):
             - value: either a Dict or False to hide the column, the dict format is
                 - name: the name of the column
                 - goal: "lower_is_better" or "higher_is_better"
+        auto_refresh: bool
+            Should the display auto-refresh ?
+        rich_kwargs: Dict[str, Any]
+            Any parameter to pass on to the `rich.Progress` instance
         """
 
         # Logging attributes
@@ -216,6 +224,8 @@ class RichTablePrinter(Progress):
             TaskProgressColumn(),
             TimeRemainingColumn(),
             PostfixColumn(),
+            auto_refresh=auto_refresh,
+            **rich_kwargs,
         )
         self.live.__class__ = FixedLive
 
@@ -339,9 +349,11 @@ class RichTablePrinter(Progress):
             prev_count = len(
                 self.logger_table.columns[self.name_to_column_idx[name]]._cells
             )
-            formatted_value = get_last_matching_value(self.rules, name, "format", "{}")[
-                1
-            ].format(value)
+            formatter = get_last_matching_value(self.rules, name, "format", "{}")[1]
+            try:
+                formatted_value = formatter.format(value)
+            except ValueError:
+                formatted_value = str(value)
             goal = get_last_matching_value(self.rules, name, "goal", None)[1]
             goal_wait = get_last_matching_value(self.rules, name, "goal_wait", 1)[1]
             if goal is not None:
@@ -435,8 +447,6 @@ class RichTablePrinter(Progress):
             gui=False,
             **kwargs,
         ):
-            logger.ensure_live()
-
             return TqdmShim(
                 iterable=iterable,
                 description=desc,
@@ -444,6 +454,7 @@ class RichTablePrinter(Progress):
                 leave=leave,
                 disable=disable,
                 printer=logger,
+                min_interval=mininterval,
             )
 
         tqdm.tqdm.__new__ = __new__
@@ -466,6 +477,7 @@ class TqdmShim:
         description,
         leave,
         printer: "RichTablePrinter",
+        min_interval=0.1,
     ):
         self.total = total
         self.iterable = iterable
@@ -473,6 +485,10 @@ class TqdmShim:
         self.description = description
         self.leave = leave
         self.printer = printer
+        self.last_tick = time.time()
+        self.min_interval = min_interval
+
+        printer.ensure_live()
 
         if self.disable:
             self.task = self.task_id = None
@@ -499,7 +515,7 @@ class TqdmShim:
             try:
                 for item in self.iterable:
                     yield item
-                    self.printer.update(self.task_id, advance=1)
+                    self.update(1)
             finally:
                 if not self.leave:
                     self.task["disposable"] = True
@@ -513,15 +529,20 @@ class TqdmShim:
         if self.task_id is None:
             return
         self.printer.update(self.task_id, advance=n)
+        self.refresh()
 
     def set_description(self, desc, refresh=True):
         if self.task_id is None:
             return
         self.printer.update(self.task_id, description=desc)
         if refresh:
-            self.printer.refresh()
+            self.refresh()
 
     def refresh(self):
+        tick = time.time()
+        if tick - self.last_tick < self.min_interval:
+            return
+        self.last_tick = tick
         if self.task_id is None:
             return
         self.printer.refresh()
@@ -582,9 +603,16 @@ class TqdmShim:
             ),
         )
         if refresh:
-            self.printer.refresh()
+            self.refresh()
 
     def close(self):
+        self.refresh()
         if self.task is not None:
             self.task["disposable"] = True
         self.printer.prune_tasks()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
