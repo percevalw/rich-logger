@@ -9,16 +9,27 @@ def test_pytorch_lightning_logger(tmpdir, capsys):
     seed_everything(43)
 
     class Model(BoringModel):
-        def validation_step(self, batch, batch_idx):
-            output = self.layer(batch)
-            loss = self.loss(batch, output)
-            return {"loss": loss}
+        def __init__(self):
+            super().__init__()
+            self.validation_step_outputs = []
 
-        def validation_epoch_end(self, outputs) -> None:
+        def validation_step(self, batch, batch_idx):
+            self.layer(batch)
+            try:
+                output = self.layer(batch)
+                loss = self.loss(batch, output)
+            except Exception:
+                pass
+            loss = batch_idx * 0.1
+            self.validation_step_outputs.append(loss)
+            return {"loss": loss, "x": torch.zeros(0)}
+
+        def on_validation_epoch_end(self) -> None:
             self.log(
                 "val_loss",
-                int(100 * (torch.stack([x["loss"] for x in outputs]).mean())),
+                int(100 * (torch.as_tensor(self.validation_step_outputs).mean())),
             )
+            self.validation_step_outputs = []
 
     model = Model()
     trainer = Trainer(
@@ -45,15 +56,15 @@ def test_pytorch_lightning_logger(tmpdir, capsys):
         "┏━━━━━━━┳━━━━━━┳━━━━━━━━━━┓\n"
         "┃ epoch ┃ step ┃ val_loss ┃\n"
         "┡━━━━━━━╇━━━━━━╇━━━━━━━━━━┩\n"
-        "│ 0     │ 2    │ 622.0    │\n"
-        "│ 1     │ 5    │ 390.0    │\n"
-        "│ 2     │ 8    │ 379.0    │\n"
-        "│ 3     │ 11   │ 379.0    │\n"
-        "│ 4     │ 14   │ 378.0    │\n"
-        "│ 5     │ 17   │ 378.0    │\n"
-        "│ 6     │ 20   │ 378.0    │\n"
-        "│ 7     │ 23   │ 378.0    │\n"
-        "│ 8     │ 26   │ 378.0    │\n"
-        "│ 9     │ 29   │ 378.0    │\n"
+        "│ 0     │ 2    │ 10.0     │\n"
+        "│ 1     │ 5    │ 10.0     │\n"
+        "│ 2     │ 8    │ 10.0     │\n"
+        "│ 3     │ 11   │ 10.0     │\n"
+        "│ 4     │ 14   │ 10.0     │\n"
+        "│ 5     │ 17   │ 10.0     │\n"
+        "│ 6     │ 20   │ 10.0     │\n"
+        "│ 7     │ 23   │ 10.0     │\n"
+        "│ 8     │ 26   │ 10.0     │\n"
+        "│ 9     │ 29   │ 10.0     │\n"
         "└───────┴──────┴──────────┘\n"
     )
