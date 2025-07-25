@@ -385,7 +385,11 @@ class RichTablePrinter(Progress):
     def ensure_live(self):
         if self.logger_table is None:
             self.logger_table = Table()
-            self.console.clear_live()
+            try:
+                self.console.clear_live()
+            except IndexError:
+                # in case there was no live
+                pass
             self.start()
 
     def finalize(self):
