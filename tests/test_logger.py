@@ -112,7 +112,7 @@ def test_tqdm(capsys):
             "format": "{:.4f}",
             "name": r"\1_p",
         },
-        "duration": {"format": "{:.1f}", "name": "dur(s)"},
+        "duration": {"name": "dur(s)", "format": "{:.1f}"},
         ".*": True,
     }
 
